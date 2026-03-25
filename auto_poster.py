@@ -17,6 +17,8 @@ import os
 from news_fetcher import get_latest_news
 from generator import generate_post, generate_post_groq
 from dotenv import load_dotenv
+from apscheduler.schedulers.blocking import BlockingScheduler
+import telegram_notify
 
 # Load environment variables
 load_dotenv()
@@ -300,68 +302,102 @@ def get_next_template(type_str, num_templates):
         
     return new_idx
 
-# --- Main Loop ---
+# --- Jobs for Scheduler ---
+
+def post_news_job():
+    """Job to fetch news and post to Square."""
+    try:
+        logger.info("📰 Job Started: News Post")
+        news_data = get_latest_news()
+        
+        if news_data:
+            logger.info(f"🤖 Generating News post for: {news_data['title'][:50]}...")
+            # Prioritize Groq
+            news_post = generate_post_groq(news_data)
+            if not news_post:
+                logger.info("⚠️ Groq failed, trying Gemini fallback...")
+                news_post = generate_post(news_data)
+            
+            if news_post:
+                post_to_square(news_post)
+                telegram_notify.notify_success(news_post, "News")
+            else:
+                logger.error("Failed to generate news post content.")
+        else:
+            logger.warning("No news found, skipping news post.")
+            
+    except Exception as e:
+        logger.error(f"Error in post_news_job: {str(e)}")
+
+def post_market_job():
+    """Job to fetch market data and post to Square."""
+    try:
+        logger.info("📊 Job Started: Market Update")
+        now_str = datetime.now().strftime('%d %b')
+        
+        # Step 1: Fetch Data
+        gainers, losers = fetch_tokens()
+        if not gainers or not losers:
+            logger.warning("No tokens fetched or Binance API failed. Retrying in 60s...")
+            time.sleep(60)
+            gainers, losers = fetch_tokens()
+            if not gainers or not losers:
+                logger.error("Retry failed. Skipping this cycle.")
+                return
+
+        # Step 2: Post Gainer
+        g_content = get_post_content("gainer", gainers, now_str)
+        if g_content:
+            post_to_square(g_content)
+            telegram_notify.notify_success(g_content, "Gainer Update")
+        
+        logger.info(f"Waiting {WAIT_BETWEEN}s before loser post...")
+        time.sleep(WAIT_BETWEEN)
+        
+        # Step 3: Post Loser
+        l_content = get_post_content("loser", losers, now_str)
+        if l_content:
+            post_to_square(l_content)
+            telegram_notify.notify_success(l_content, "Loser Update")
+            
+    except Exception as e:
+        logger.error(f"Error in post_market_job: {str(e)}")
 
 def main():
-    logger.info("🚀 Auto Poster Script Started!")
+    logger.info("🚀 Auto Poster Script Started with APScheduler!")
     
     # Verify templates loaded
     if not GAINER_TEMPLATES or not LOSER_TEMPLATES:
         logger.error("Failed to load templates. Check txt files. Exiting.")
         return
 
-    while True:
-        try:
-            now_str = datetime.now().strftime('%d %b') # Format: 25 Mar
-            logger.info(f"--- Starting new cycle at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---")
-            
-            # Step 1: Latest News
-            logger.info("📰 Fetching latest news...")
-            news_data = get_latest_news()
-            if news_data:
-                logger.info(f"🤖 Generating News post for: {news_data['title'][:50]}...")
-                news_post = generate_post(news_data)
-                if not news_post:
-                    news_post = generate_post_groq(news_data)
-                
-                if news_post:
-                    post_to_square(news_post)
-                    logger.info(f"Waiting {WAIT_BETWEEN}s before market update...")
-                    time.sleep(WAIT_BETWEEN)
-            else:
-                logger.warning("No news found, skipping news post.")
+    # Notify Startup
+    telegram_notify.notify_startup()
 
-            # Step 2: Fetch Market Data
-            gainers, losers = fetch_tokens()
-            
-            if not gainers or not losers:
-                logger.warning("No tokens fetched or Binance API failed. Retrying in 60s...")
-                time.sleep(60)
-                gainers, losers = fetch_tokens()
-                if not gainers or not losers:
-                    logger.error("Retry failed. Skipping this cycle.")
-                    time.sleep(SLEEP_CYCLE)
-                    continue
+    # Initial Run
+    logger.info("Checking news and market data for initial run...")
+    post_news_job()
+    post_market_job()
 
-            # Step 2 & 3: Gainer Post
-            g_content = get_post_content("gainer", gainers, now_str)
-            if g_content:
-                post_to_square(g_content)
-            
-            logger.info(f"Waiting {WAIT_BETWEEN}s before loser post...")
-            time.sleep(WAIT_BETWEEN)
-            
-            # Step 2 & 3: Loser Post
-            l_content = get_post_content("loser", losers, now_str)
-            if l_content:
-                post_to_square(l_content)
-            
-            logger.info(f"Cycle complete. Sleeping for {SLEEP_CYCLE / 3600} hours...")
-            time.sleep(SLEEP_CYCLE)
-            
-        except Exception as e:
-            logger.error(f"Critical error in main loop: {str(e)}")
-            time.sleep(60)
+    # Setup Scheduler
+    scheduler = BlockingScheduler()
+    
+    # News Job: Every 3 hours
+    scheduler.add_job(post_news_job, 'interval', hours=3, id='news_job')
+    
+    # Market Job: Every 6 hours
+    scheduler.add_job(post_market_job, 'interval', hours=6, id='market_job')
+
+    logger.info("Next news post in 3 hours. Next market update in 6 hours.")
+    
+    try:
+        scheduler.start()
+    except (KeyboardInterrupt, SystemExit):
+        logger.info("Scheduler stopped by user.")
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n\n🛑 Script stopped by user. Bye!")
+        logger.info("Script stopped by user (KeyboardInterrupt)")

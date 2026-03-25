@@ -25,9 +25,13 @@ STRICT RULES:
 Output only the post text, nothing else."""
 
     try:
+        from google.genai import types
         response = client.models.generate_content(
             model="gemini-2.5-flash",
-            contents=prompt
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                http_options=types.HttpOptions(timeout=60)
+            )
         )
         post = response.text.strip()
         if len(post) > 1000:
@@ -62,7 +66,8 @@ Output only the post text."""
         response = client_groq.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=400
+            max_tokens=400,
+            timeout=60
         )
         post = response.choices[0].message.content.strip()
         if len(post) > 1000:
@@ -104,9 +109,13 @@ def generate_market_post(tokens, mode="gainer"):
     Output only the post text."""
 
     try:
+        from google.genai import types
         response = client.models.generate_content(
             model="gemini-2.5-flash",
-            contents=prompt
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                http_options=types.HttpOptions(timeout=60)
+            )
         )
         post = response.text.strip()
         return post

@@ -6,7 +6,7 @@ load_dotenv()
 def get_latest_news():
     url = "https://newsapi.org/v2/everything"
     params = {
-        "q": "(bitcoin OR crypto OR binance OR altcoin) AND (breaking OR alert OR analysis)",
+        "q": "bitcoin OR crypto OR binance OR altcoin OR ethereum",
         "sortBy": "publishedAt",
         "pageSize": 5,
         "language": "en",
@@ -21,7 +21,8 @@ def get_latest_news():
         return {
             "title": top["title"],
             "description": top["description"] or top["title"],
-            "source": top["source"]["name"]
+            "source": top["source"]["name"],
+            "published": top["publishedAt"]
         }
     except Exception as e:
         print(f"❌ News fetch error: {e}")

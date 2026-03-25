@@ -1,0 +1,24 @@
+{
+    "venvPath": "/Users/satyamkumar/binance_square",
+    "venv": ".venv",
+    "include": [
+        "/Users/satyamkumar/binance_square"
+    ],
+    "exclude": [
+        "**/node_modules",
+        "**/__pycache__",
+        "/Users/satyamkumar/binance_square/.venv"
+    ],
+    "executionEnvironments": [
+        {
+            "root": "/Users/satyamkumar/binance_square",
+            "extraPaths": [
+                "/Users/satyamkumar/binance_square"
+            ]
+        }
+    ],
+    "reportMissingImports": true,
+    "reportMissingTypeStubs": false,
+    "pythonVersion": "3.10",
+    "pythonPlatform": "Darwin"
+}
