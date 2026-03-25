@@ -29,8 +29,15 @@ You will need the following keys in your `.env` file:
    cd binance_square
    ```
 
-2. **Install dependencies**:
+2. **Setup Virtual Environment & Install dependencies**:
    ```bash
+   # Create a virtual environment (if not already done)
+   python3 -m venv .venv
+   
+   # Activate the virtual environment
+   source .venv/bin/activate
+   
+   # Install dependencies
    pip install -r requirements.txt
    ```
 
@@ -39,6 +46,10 @@ You will need the following keys in your `.env` file:
 
 4. **Run the Bot**:
    ```bash
+   # Ensure the virtual environment is activated
+   source .venv/bin/activate
+   
+   # Run the bot
    python main.py
    ```
 
